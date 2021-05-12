@@ -5,3 +5,4 @@
 
 obj-$(CONFIG_N5010_PHY) += n5010-phy.o
 obj-$(CONFIG_N5010_HSSI) += n5010-hssi.o
+obj-$(CONFIG_N5010_HTK) += n5010-htk.o
