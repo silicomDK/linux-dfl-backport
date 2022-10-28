@@ -4,6 +4,7 @@
  * Copyright (C) 2020 Silicom Denmark A/S. All rights reserved.
  */
 #include <linux/bits.h>
+#include <linux/bitfield.h>
 #include <linux/device.h>
 #include <linux/mfd/intel-m10-bmc.h>
 #include <linux/mod_devicetable.h>
@@ -24,6 +25,9 @@
 #define N5010_PHY_LED_0		GENMASK(5, 3)
 #define N5010_PHY_LED_1		GENMASK(21, 19)
 
+#define N5010_GP_INPUT_CSR	0x080
+#define N5010_BOARD_TYPE	GENMASK(19, 16)
+
 struct n5010_phy {
 	struct intel_m10bmc *m10bmc;
 };
@@ -41,6 +45,32 @@ static struct fixed_phy_status n5010_phy_status = {
 	.speed = 1000,
 	.duplex = 1,
 };
+
+static ssize_t board_info_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct n5010_phy *priv = dev_get_drvdata(dev);
+	unsigned int csr = 0, board_type;
+	char *board_info = "N/A";
+
+	m10bmc_sys_read(priv->m10bmc, N5010_GP_INPUT_CSR, &csr);
+	board_type = FIELD_GET(N5010_BOARD_TYPE, csr);
+	if (board_type == 3)
+	    board_info = "N5013";
+	if (board_type == 4)
+	    board_info = "N5014";
+
+	return sysfs_emit(buf, "%s\n", board_info);
+}
+
+static DEVICE_ATTR_RO(board_info);
+
+static struct attribute *n5010bmc_phy_attrs[] = {
+	&dev_attr_board_info.attr,
+	NULL,
+};
+
+ATTRIBUTE_GROUPS(n5010bmc_phy);
 
 static int n5010_phy_sfp_status(struct n5010_port *port)
 {
@@ -210,6 +240,10 @@ static int n5010_phy_probe(struct platform_device *pdev)
 	dev_set_drvdata(dev, priv);
 	priv->m10bmc = dev_get_drvdata(dev->parent);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0) && RHEL_RELEASE_CODE < 0x803
+	return device_add_groups(dev, n5010bmc_phy_groups);
+#endif
+
 	return 0;
 }
 
@@ -224,6 +258,9 @@ static struct platform_driver n5010_phy_driver = {
 	.probe = n5010_phy_probe,
 	.driver = {
 		.name = "n5010bmc-phy",
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0) || RHEL_RELEASE_CODE >= 0x803
+		.dev_groups = n5010bmc_phy_groups,
+#endif
 	},
 	.id_table = n5010_phy_ids,
 };
