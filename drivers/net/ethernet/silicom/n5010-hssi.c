@@ -73,7 +73,6 @@ struct n5010_hssi_regmaps {
 };
 
 struct n5010_hssi_netdata {
-	struct dfl_device *dfl_dev;
 	struct regmap *regmap_mac;
 	struct regmap *regmap_fec;
 	struct regmap *regmap_phy;
@@ -448,56 +447,56 @@ static int n5010_hssi_create_netdev(struct n5010_hssi_drvdata *priv,
 	netdev = alloc_netdev(sizeof(struct n5010_hssi_netdata),
 			      "n5010_hssi%d", NET_NAME_UNKNOWN,
 			      n5010_hssi_init_netdev);
-	priv->netdev[port] = netdev;
-
 	if (!netdev)
 		return -ENOMEM;
 
 	npriv = netdev_priv(netdev);
 
-	npriv->dfl_dev = priv->dfl_dev;
-
 	npriv->regmap_mac = n5010_hssi_create_regmap(priv, port, regmap_mac);
 	if (!npriv->regmap_mac)
-		goto err_unreg_netdev;
+		goto err_free_netdev;
 
 	npriv->regmap_fec = n5010_hssi_create_regmap(priv, port, regmap_fec);
 	if (!npriv->regmap_fec)
-		goto err_unreg_netdev;
+		goto err_free_netdev;
 
 	npriv->regmap_phy = n5010_hssi_create_regmap(priv, port, regmap_phy);
 	if (!npriv->regmap_phy)
-		goto err_unreg_netdev;
+		goto err_free_netdev;
 
 	npriv->ops_params = &n5010_100g_params;
 
 	SET_NETDEV_DEV(netdev, dev);
 
-	flags = ETH_RESET_MGMT;
-
 	npriv->link_status = FEC_RX_STATUS_LINK_NO;
 
+	flags = ETH_RESET_MGMT;
 	err = ethtool_reset(netdev, &flags);
 	if (err) {
-		dev_err(dev, "failed to reset MGMT %s: %d", netdev->name, err);
-		goto err_unreg_netdev;
+		dev_err(dev, "failed to reset MGMT n5010_hssi%llu: %d", port, err);
+		goto err_free_netdev;
 	}
 
 	err = register_netdev(netdev);
 	if (err) {
 		dev_err(dev, "failed to register %s: %d", netdev->name, err);
-		goto err_unreg_netdev;
+		goto err_free_netdev;
 	}
 
 	err = n5010_phy_attach(phy, netdev, n5010_hssi_update_link, port);
 	if (err)
 		goto err_unreg_netdev;
 
+	priv->netdev[port] = netdev;
+
 	return 0;
 
 err_unreg_netdev:
 	unregister_netdev(netdev);
+	return err;
 
+err_free_netdev:
+	free_netdev(netdev);
 	return err;
 }
 
@@ -530,6 +529,20 @@ static int n5010_match_phy_master(struct device *dev, const void *data)
 	 * (pci) device of the n5010-hssi device
 	 */
 	return dfl_dev_get_base_dev(to_dfl_dev(dev)) == base_dev;
+}
+
+static void n5010_hssi_remove(struct dfl_device *dfl_dev)
+{
+	struct n5010_hssi_drvdata *priv = dev_get_drvdata(&dfl_dev->dev);
+	u64 port;
+
+	for (port = 0; port < priv->port_cnt; port++) {
+		struct net_device *my_netdev = priv->netdev[port];
+		if (my_netdev) {
+			n5010_phy_detach(my_netdev);
+			unregister_netdev(my_netdev);
+		}
+	}
 }
 
 static int n5010_hssi_probe(struct dfl_device *dfl_dev)
@@ -583,8 +596,11 @@ static int n5010_hssi_probe(struct dfl_device *dfl_dev)
 
 	for (port = 0; port < priv->port_cnt; port++) {
 		ret = n5010_hssi_create_netdev(priv, phy_dev, port);
-		if (ret)
-			goto err_phy_dev;
+		if (ret) {
+			// cleanup network interfaces already created
+			n5010_hssi_remove(dfl_dev);
+			break;
+		}
 	}
 
 err_phy_dev:
@@ -593,17 +609,6 @@ err_phy_master:
 	put_device(phy_master);
 
 	return ret;
-}
-
-static void n5010_hssi_remove(struct dfl_device *dfl_dev)
-{
-	struct n5010_hssi_drvdata *priv = dev_get_drvdata(&dfl_dev->dev);
-	u64 port;
-
-	for (port = 0; port < priv->port_cnt; port++) {
-		n5010_phy_detach(priv->netdev[port]);
-		unregister_netdev(priv->netdev[port]);
-	}
 }
 
 #define FME_FEATURE_ID_LL_100G_MAC_N5010	0x1f /* Silicom Lightning Creek */
