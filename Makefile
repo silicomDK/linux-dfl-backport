@@ -159,6 +159,14 @@ install:
 clean:
 	@$(MAKE) -C $(KERNELDIR) M=$(CURDIR) clean
 	@-rm -f *.rpm
+	@-rm -f intel-fpga*.*
+	@-rm -f build/debian/changelog
+	@-rm -f build/debian/files
+	@-rm -f build/debian/intel-fpga-dfl-dkms.postinst
+	@-rm -f build/debian/intel-fpga-dfl-dkms.prerm
+	@-rm -f build/debian/intel-fpga-dfl-dkms.substvars
+	@-rm -fr build/debian/intel-fpga-dfl-dkms
+	@-rm -fr build/debian/tmp
 
 $(rules_rmmod): rmmod_%:
 	@if lsmod | grep -qE '\<$*\>'; then rmmod $*; fi
