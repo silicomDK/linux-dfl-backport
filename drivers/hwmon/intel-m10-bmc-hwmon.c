@@ -344,7 +344,6 @@ static const struct m10bmc_sdata n5014bmc_temp_tbl[] = {
 	{ 0x100, 0x0, 0x104, 0x0, 0x0, 125, "Board Front Temperature" },
 	{ 0x108, 0x0, 0x10c, 0x0, 0x0, 125, "FPGA Core Temperature" },
 	{ 0x110, 0x0, 0x114, 0x0, 0x0, 125, "FPGA P-TILE Temperature" },
-	{ 0x118, 0x0, 0x11c, 0x0, 0x0, 125, "FPGA E-TILE Temperature" },
 	{ 0x120, 0x0, 0x0, 0x0, 0x0, 1000, "Board Middle Temperature" },
 	{ 0x124, 0x0, 0x0, 0x0, 0x0, 1000, "Board Rear Temperature" },
 	{ 0x130, 0x0, 0x0, 0x0, 0x0, 1000, "1V2 FPGA Temperature" },
@@ -395,7 +394,6 @@ static const struct m10bmc_sdata n5014bmc_curr_tbl[] = {
 
 static const struct hwmon_channel_info *n5014bmc_hinfo[] = {
 	HWMON_CHANNEL_INFO(temp,
-			   HWMON_T_INPUT | HWMON_T_CRIT | HWMON_T_LABEL,
 			   HWMON_T_INPUT | HWMON_T_CRIT | HWMON_T_LABEL,
 			   HWMON_T_INPUT | HWMON_T_CRIT | HWMON_T_LABEL,
 			   HWMON_T_INPUT | HWMON_T_CRIT | HWMON_T_LABEL,
