@@ -38,7 +38,7 @@
 #define MB_MAC_OFFSET		0x28
 #define MB_FEC_OFFSET		0x68
 #define MB_PHY_OFFSET		0xa8
-#define MB_PORT_SIZE            0x10
+#define MB_PORT_SIZE		0x10
 
 #define PHY_BASE_OFF		0x2000
 #define PHY_RX_SER_LOOP_BACK	0x4e1
@@ -52,6 +52,7 @@
 #define MAC_RX_MTU		0x506
 #define MAC_MAX_MTU		9600
 
+#define ILL_100G_RX_FWD_FCS	0x507
 #define ILL_100G_TX_STATS_CLR	0x845
 #define ILL_100G_RX_STATS_CLR	0x945
 #define ILL_100G_LPBK_OFF	0x313
@@ -122,9 +123,22 @@ static int netdev_change_mtu(struct net_device *netdev, int new_mtu)
 	return regmap_write(npriv->regmap_mac, MAC_RX_MTU, new_mtu);
 }
 
+static int netdev_set_rx_fcs(struct net_device *netdev, netdev_features_t features)
+{
+	struct n5010_hssi_netdata *npriv = netdev_priv(netdev);
+	netdev_features_t change = (features ^ netdev->features) & NETIF_F_RXFCS;
+	bool enable = !!(features & NETIF_F_RXFCS);
+
+	if (!change)
+		return 0;
+
+	return regmap_write(npriv->regmap_mac, ILL_100G_RX_FWD_FCS, enable);
+}
+
 static int netdev_set_features(struct net_device *netdev,
 			       netdev_features_t features)
 {
+	netdev_set_rx_fcs(netdev, features);
 	return 0;
 }
 
@@ -252,6 +266,8 @@ static int ethtool_reset(struct net_device *netdev, u32 *flags)
 			dev_err(&netdev->dev, "failed to clear rx stats\n");
 			return ret;
 		}
+
+		*flags &= ~ETH_RESET_MGMT;
 	}
 
 	return 0;
@@ -358,6 +374,7 @@ static void n5010_hssi_init_netdev(struct net_device *netdev)
 {
 	netdev->ethtool_ops = &ethtool_ops;
 	netdev->netdev_ops = &netdev_ops;
+	netdev->hw_features = NETIF_F_RXFCS;
 	netdev->features = 0;
 	netdev->hard_header_len = 0;
 	netdev->priv_flags |= IFF_NO_QUEUE;
