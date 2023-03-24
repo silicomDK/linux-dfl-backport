@@ -139,9 +139,16 @@ static int n5010_phy_set_led(struct n5010_port *port, bool link)
 
 static void n5010_phy_adjust_link(struct net_device *netdev)
 {
-	struct n5010_port *port = netdev->phydev->priv;
-	bool link = netdev->phydev->link;
+	struct n5010_port *port;
+	bool link;
 	int err;
+
+	if (!netdev) {
+		printk("n5010_phy_adjust_link called with netdev==NULL, ignored");
+		return;
+	}
+	port = netdev->phydev->priv;
+	link = netdev->phydev->link;
 
 	netdev_info(netdev, "link: %i\n", link);
 
@@ -153,8 +160,16 @@ static void n5010_phy_adjust_link(struct net_device *netdev)
 static int n5010_phy_update_link(struct net_device *netdev,
 				 struct fixed_phy_status *status)
 {
-	struct n5010_port *port = netdev->phydev->priv;
-	bool sfp_in = port->sfp_in;
+	struct n5010_port *port;
+	bool sfp_in;
+
+	if (!netdev) {
+		printk("n5010_phy_update_link called with netdev==NULL, ignored");
+		return 0;
+	}
+
+	port = netdev->phydev->priv;
+	sfp_in = port->sfp_in;
 
 	n5010_phy_sfp_status(port);
 	status->link = port->get_link(netdev);
