@@ -540,6 +540,11 @@ static void n5010_hssi_remove(struct dfl_device *dfl_dev)
 		struct net_device *my_netdev = priv->netdev[port];
 		if (my_netdev) {
 			n5010_phy_detach(my_netdev);
+		}
+	}
+	for (port = 0; port < priv->port_cnt; port++) {
+		struct net_device *my_netdev = priv->netdev[port];
+		if (my_netdev) {
 			unregister_netdev(my_netdev);
 		}
 	}
