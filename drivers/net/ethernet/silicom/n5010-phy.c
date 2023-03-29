@@ -237,7 +237,7 @@ int n5010_phy_detach(struct net_device *netdev)
 
 	fixed_phy_change_carrier(netdev, false);
 
-	phy_detach(phy);
+	phy_disconnect(phy);
 	fixed_phy_unregister(phy);
 	phy_device_free(phy);
 
