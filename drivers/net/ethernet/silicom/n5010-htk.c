@@ -172,8 +172,14 @@ static void ethtool_get_stats(struct net_device *netdev,
 
 u32 ethtool_get_link(struct net_device *netdev)
 {
-	struct n5010_htk_netdata *npriv = netdev_priv(netdev);
+	struct n5010_htk_netdata *npriv;
 	u32 data_l;
+
+	if (!netdev) {
+		printk("n5010_htk_get_link called with netdev==NULL, ignored");
+		return 0;
+	}
+	npriv = netdev_priv(netdev);
 
 	// Read bit 0 in Deskew status register to determine link status
 	regmap_read(npriv->regmap_mac, PCS_OFFSET + 0x10, &data_l);
