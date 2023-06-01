@@ -661,13 +661,30 @@ static u32 n5010_htk_reset(struct net_device *netdev)
 		&readdata); // after reconfiguration should contain 0xf00037f0
 
 	regmap_write(regmap, XCVR_CSR1_OFFSET, (0xFFFFFFFD & readdata) | 0x2);
-	//netdev_dbg(netdev, "HTKDEBUG: n5010_htk_reset - The Reset has been asserted");
+	netdev_dbg(netdev, "HTKDEBUG: n5010_htk_reset - The Reset has been asserted");
 
-	udelay(1000);
+	do {
+		udelay(1000);
+
+	// Ensure that the transceivers are actually in reset:
+		regmap_read(regmap, XCVR_CSR1_OFFSET, &readdata);
+		tx_rx_ready_status = (readdata >> 12) & 0x3;
+		if ( tx_rx_ready_status == 0x0 ) {
+		   netdev_dbg(netdev, "HTKDEBUG: n5010_htk_reset asserted successfully. tx_rx_ready_status is = 0x%x\n", tx_rx_ready_status);
+		} else {
+		   netdev_dbg(netdev, "HTKDEBUG: ERROR: n5010_htk_reset NOT ASSERTED as expected. tx_rx_ready_status is = 0x%x\n", tx_rx_ready_status);
+		}
+		timeout++;
+		if (timeout >= 200) {
+			netdev_info(netdev, "ERROR n5010_htk_reset timeout, reset NOT ASSERTED, - Waited no: %d\n", timeout);
+			return timeout;
+		}
+	} while (tx_rx_ready_status != 0x0);
 
 	regmap_write(regmap, XCVR_CSR1_OFFSET, (0xFFFFFFFD & readdata));
 	//netdev_dbg(netdev, "HTKDEBUG: n5010_htk_reset - The Reset has been DE-asserted");
 
+	timeout = 0;
 	while (tx_rx_ready_status_ok_cnt < 100) {
 		regmap_read(regmap, XCVR_CSR1_OFFSET, &readdata);
 		tx_rx_ready_status = (readdata >> 12) & 0x3;
@@ -698,6 +715,7 @@ static u32 n5010_htk_wait_for_rx_freqlocked_1ms(struct net_device *netdev, u32 t
 	u32 chs_w_rx_traffic;           // Number of channels with data arriving on the Rx
 	u32 xcvr_channel;
 	u32 drp_rd;
+	u32 drp_rds_ok_cnt[4]={0,0,0,0};
 
 	while (chs_has_rx_traffic_cnt <= 1000) {
 		udelay(1);
@@ -709,6 +727,9 @@ static u32 n5010_htk_wait_for_rx_freqlocked_1ms(struct net_device *netdev, u32 t
 			chs_w_rx_traffic += (drp_rd & 0x1);
 			// This eye height measurement does not work,
 			//eye_heights[xcvr_channel] = n5010_htk_update_pma_setting(regmap, xcvr_channel, 0x002C1700); // 0x002C PMA Attribute code: Read. 0x1700 PMA Attribute data: Eye height.
+
+			// DEBUG Code to update the ok counter:
+			drp_rds_ok_cnt[xcvr_channel] += (drp_rd & 0x1);
 		}
 		//netdev_dbg(netdev, "HTKDEBUG: 11.5. DEBUG - Number of channels that have Rx traffic: %d", chs_w_rx_traffic);
 		//netdev_dbg(netdev, "HTKDEBUG: 11.5. DEBUG - Eye heights. Ch3: %d, Ch2: %d,  Ch1: %d, Ch0: %d", eye_heights[3], eye_heights[2], eye_heights[1], eye_heights[0]);
@@ -720,10 +741,13 @@ static u32 n5010_htk_wait_for_rx_freqlocked_1ms(struct net_device *netdev, u32 t
 		//netdev_dbg(netdev, "HTKDEBUG: 11.5. DEBUG - Number of times in a row that all channels have Rx traffic: %d", chs_has_rx_traffic_cnt);
 		if  (timeout >= timeout_us) {
 			netdev_info(netdev, "HTKDEBUG: ERROR Timeout while waiting for all channels to have Rx traffic. Timeout value in microseconds: %d", timeout);
+			netdev_info(netdev, "HTKDEBUG: ERROR n5010_htk_wait_for_rx_freqlocked_1ms. rx_is_lockedtodata cnts: lane0: %d, lane1: %d, lane2: %d, lane3: %d", drp_rds_ok_cnt[0], drp_rds_ok_cnt[1], drp_rds_ok_cnt[2], drp_rds_ok_cnt[3]);
 			return 0;
 		}
 	};
-   return 1; // success returns 1
+	netdev_dbg(netdev, "HTKexDEBUG: n5010_htk_wait_for_rx_freqlocked_1ms. rx_is_lockedtodata cnts: lane0: %d, lane1: %d, lane2: %d, lane3: %d", drp_rds_ok_cnt[0], drp_rds_ok_cnt[1], drp_rds_ok_cnt[2], drp_rds_ok_cnt[3]);
+	netdev_dbg(netdev, "HTKexDEBUG: rx_freqlocked_1ms detected high - All channels have Rx traffic. Timeout value in microseconds: %d", timeout);
+	return 1; // success returns 1
 }
 
 /*
@@ -747,6 +771,8 @@ static void n5010_htk_setup_regs(struct net_device *netdev)
 	//u32 eye_heights[4];
 	u32 i;
 	u32 success;
+	u32 ia_cnt;
+	u32 init_adapt_success_cnt = 0;
 
 	netdev_dbg(netdev, "HTKDEBUG: 1. Start. assert and deassert Reset to the Native PHY by writing XCVR register offset 4 to 0x2");
 	n5010_htk_reset(netdev);
@@ -871,23 +897,34 @@ static void n5010_htk_setup_regs(struct net_device *netdev)
 
 	netdev_dbg(netdev, "HTKDEBUG: 13. Set initial adaptation effort level. NOT IMPLEMENTED AS THE PREVIOUS SELECTED LEVEL IS REQUESTED");
 
-	netdev_dbg(netdev, "HTKDEBUG: 14. Start. Perform Initial adaptation.");
-	for (xcvr_channel = 0; xcvr_channel < 4; xcvr_channel++) {
-		drp_ret = n5010_htk_update_pma_setting(netdev, xcvr_channel, 0x000A0001);
-		netdev_dbg(netdev, "HTKDEBUG: 14. Starting initial adaptation for channel: %d,  PMA setting returns: 0x%x",
-			       xcvr_channel, drp_ret);
-	}
-	netdev_dbg(netdev, "HTKDEBUG: 14. End.   Perform Initial adaptation.");
+	// Perform two succesfull initial adaptations in a row:
+	for (ia_cnt = 1; ia_cnt <= 10; ia_cnt++) {
+		netdev_dbg(netdev, "HTKDEBUG: 14. Start. Perform Initial adaptation for the %d. time", ia_cnt );
+		for (xcvr_channel = 0; xcvr_channel < 4; xcvr_channel++) {
+			drp_ret = n5010_htk_update_pma_setting(netdev, xcvr_channel, 0x000A0001);
+			netdev_dbg(netdev, "HTKDEBUG: 14. Starting initial adaptation for channel: %d,  PMA setting returns: 0x%x",
+				       xcvr_channel, drp_ret);
+		}
+		netdev_dbg(netdev, "HTKDEBUG: 14. End.   Perform Initial adaptation for the %d. time", ia_cnt);
 
-	udelay(10000); // Waiting 10 ms to ensure that the Initial Adaptation is actually started before waiting for it to complete
+		udelay(10000); // Waiting 10 ms to ensure that the Initial Adaptation is actually started before waiting for it to complete
 
-	netdev_dbg(netdev, "HTKDEBUG: 15. Start. Verify that the initial adaptation status is complete.");
-	n5010_htk_pma_verify_adaptation(netdev, 15);
-	success = n5010_htk_wait_for_rx_freqlocked_1ms(netdev, 2000000);
-	if  (success == 0) {
-		netdev_info(netdev, "HTKDEBUG: 15. ERROR Timeout while waiting for rx_locked for 1 millisecond.");
+		netdev_dbg(netdev, "HTKDEBUG: 15. Start. Verify that the initial adaptation status is complete for the %d. time", ia_cnt);
+		n5010_htk_pma_verify_adaptation(netdev, 15);
+		success = n5010_htk_wait_for_rx_freqlocked_1ms(netdev, 2000000);
+		if (success == 1)
+			init_adapt_success_cnt++;
+		else
+			init_adapt_success_cnt = 0;
+
+		if  (init_adapt_success_cnt == 2) {
+			netdev_dbg(netdev, "HTKDEBUG: 15. Initial adaptation has succesfully run two times in a row. Ready to proceed. Number of Initial Adaptation attempts: %d", ia_cnt);
+			break;
+		} else if (ia_cnt == 10) {
+			netdev_info(netdev, "HTKDEBUG: 15. ERROR Initial Adaptation Failed! - attempts: %d", ia_cnt);
+		}
+		netdev_dbg(netdev, "HTKDEBUG: 15. End.   Verify that the initial adaptation status is complete for the %d. time", ia_cnt);
 	}
-	netdev_dbg(netdev, "HTKDEBUG: 15. End.   Verify that the initial adaptation status is complete.");
 
 	netdev_dbg(netdev, "HTKDEBUG: 16. Start. Choose the PMA configuration."); // We need to setup 3 bits with which PMA configuration shall be used for continuous adaptation.
 	// These steps are only performed on channel 0:
@@ -916,6 +953,7 @@ static void n5010_htk_setup_regs(struct net_device *netdev)
 	n5010_htk_reset(netdev);
 	netdev_dbg(netdev, "HTKDEBUG: 19. End.   Reset Transceivers sequence.");
 
+	//netdev_info(netdev, "HTKexDEBUG: 20. Check link status.");
 	netdev_dbg(netdev, "HTKDEBUG: 20. Check link status.");
 	success = n5010_htk_wait_for_rx_freqlocked_1ms(netdev, 2000000);
 	if  (success == 0) {
