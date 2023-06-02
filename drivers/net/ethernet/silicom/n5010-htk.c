@@ -1033,14 +1033,13 @@ static int n5010_htk_create_netdev(struct n5010_htk_drvdata *priv, u64 port)
 
 	priv->netdev[port] = netdev;
 
-	/* Setup needed data to make netdev_dbg print without "(unnamed net_device) (uninitialized)"
-	 * but without registering netdev to avoid seeing no link */
-	scnprintf(netdev->name, IFNAMSIZ, "n5010_htk%llu", port);
-	netdev->reg_state = NETREG_REGISTERED;
+	err = register_netdev(netdev);
+	if (err) {
+		dev_err(dev, "failed to register %s: %d", netdev->name, err);
+		goto err_unreg_netdev;
+	}
 
 	n5010_htk_setup_regs(netdev);
-
-	netdev->reg_state = NETREG_UNINITIALIZED;
 
 	//dev_dbg(dev,"htk: 0x%x \n", regmap_read(npriv->regmap_mac, PCS_OFFSET+0x4));
 
@@ -1059,12 +1058,6 @@ static int n5010_htk_create_netdev(struct n5010_htk_drvdata *priv, u64 port)
 		}
 		timeout++;
 		udelay(100);
-	}
-
-	err = register_netdev(netdev);
-	if (err) {
-		dev_err(dev, "failed to register %s: %d", netdev->name, err);
-		goto err_unreg_netdev;
 	}
 
 	if (timeout > 20000) {
