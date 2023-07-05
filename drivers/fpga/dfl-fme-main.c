@@ -19,6 +19,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/uaccess.h>
+#include <linux/units.h>
 #include <linux/fpga-dfl.h>
 #include <linux/version.h>
 
@@ -36,8 +37,7 @@ static ssize_t ports_num_show(struct device *dev,
 
 	v = readq(base + FME_HDR_CAP);
 
-	return scnprintf(buf, PAGE_SIZE, "%u\n",
-			 (unsigned int)FIELD_GET(FME_CAP_NUM_PORTS, v));
+	return sysfs_emit(buf, "%llu\n", FIELD_GET(FME_CAP_NUM_PORTS, v));
 }
 static DEVICE_ATTR_RO(ports_num);
 
@@ -56,7 +56,7 @@ static ssize_t bitstream_id_show(struct device *dev,
 
 	v = readq(base + FME_HDR_BITSTREAM_ID);
 
-	return scnprintf(buf, PAGE_SIZE, "0x%llx\n", (unsigned long long)v);
+	return sysfs_emit(buf, "0x%llx\n", v);
 }
 static DEVICE_ATTR_RO(bitstream_id);
 
@@ -75,7 +75,7 @@ static ssize_t bitstream_metadata_show(struct device *dev,
 
 	v = readq(base + FME_HDR_BITSTREAM_MD);
 
-	return scnprintf(buf, PAGE_SIZE, "0x%llx\n", (unsigned long long)v);
+	return sysfs_emit(buf, "0x%llx\n", v);
 }
 static DEVICE_ATTR_RO(bitstream_metadata);
 
@@ -90,8 +90,7 @@ static ssize_t cache_size_show(struct device *dev,
 
 	v = readq(base + FME_HDR_CAP);
 
-	return sprintf(buf, "%u\n",
-		       (unsigned int)FIELD_GET(FME_CAP_CACHE_SIZE, v));
+	return sysfs_emit(buf, "%llu\n", FIELD_GET(FME_CAP_CACHE_SIZE, v));
 }
 static DEVICE_ATTR_RO(cache_size);
 
@@ -106,8 +105,7 @@ static ssize_t fabric_version_show(struct device *dev,
 
 	v = readq(base + FME_HDR_CAP);
 
-	return sprintf(buf, "%u\n",
-		       (unsigned int)FIELD_GET(FME_CAP_FABRIC_VERID, v));
+	return sysfs_emit(buf, "%llu\n", FIELD_GET(FME_CAP_FABRIC_VERID, v));
 }
 static DEVICE_ATTR_RO(fabric_version);
 
@@ -122,8 +120,7 @@ static ssize_t socket_id_show(struct device *dev,
 
 	v = readq(base + FME_HDR_CAP);
 
-	return sprintf(buf, "%u\n",
-		       (unsigned int)FIELD_GET(FME_CAP_SOCKET_ID, v));
+	return sysfs_emit(buf, "%llu\n", FIELD_GET(FME_CAP_SOCKET_ID, v));
 }
 static DEVICE_ATTR_RO(socket_id);
 
@@ -257,19 +254,19 @@ static int thermal_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
 	switch (attr) {
 	case hwmon_temp_input:
 		v = readq(feature->ioaddr + FME_THERM_RDSENSOR_FMT1);
-		*val = (long)(FIELD_GET(FPGA_TEMPERATURE, v) * 1000);
+		*val = (long)(FIELD_GET(FPGA_TEMPERATURE, v) * MILLI);
 		break;
 	case hwmon_temp_max:
 		v = readq(feature->ioaddr + FME_THERM_THRESHOLD);
-		*val = (long)(FIELD_GET(TEMP_THRESHOLD1, v) * 1000);
+		*val = (long)(FIELD_GET(TEMP_THRESHOLD1, v) * MILLI);
 		break;
 	case hwmon_temp_crit:
 		v = readq(feature->ioaddr + FME_THERM_THRESHOLD);
-		*val = (long)(FIELD_GET(TEMP_THRESHOLD2, v) * 1000);
+		*val = (long)(FIELD_GET(TEMP_THRESHOLD2, v) * MILLI);
 		break;
 	case hwmon_temp_emergency:
 		v = readq(feature->ioaddr + FME_THERM_THRESHOLD);
-		*val = (long)(FIELD_GET(TRIP_THRESHOLD, v) * 1000);
+		*val = (long)(FIELD_GET(TRIP_THRESHOLD, v) * MILLI);
 		break;
 	case hwmon_temp_max_alarm:
 		v = readq(feature->ioaddr + FME_THERM_THRESHOLD);
@@ -311,8 +308,7 @@ static ssize_t temp1_max_policy_show(struct device *dev,
 
 	v = readq(feature->ioaddr + FME_THERM_THRESHOLD);
 
-	return sprintf(buf, "%u\n",
-		       (unsigned int)FIELD_GET(TEMP_THRESHOLD1_POLICY, v));
+	return sysfs_emit(buf, "%llu\n", FIELD_GET(TEMP_THRESHOLD1_POLICY, v));
 }
 
 static DEVICE_ATTR_RO(temp1_max_policy);
@@ -408,15 +404,15 @@ static int power_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
 	switch (attr) {
 	case hwmon_power_input:
 		v = readq(feature->ioaddr + FME_PWR_STATUS);
-		*val = (long)(FIELD_GET(PWR_CONSUMED, v) * 1000000);
+		*val = (long)(FIELD_GET(PWR_CONSUMED, v) * MICRO);
 		break;
 	case hwmon_power_max:
 		v = readq(feature->ioaddr + FME_PWR_THRESHOLD);
-		*val = (long)(FIELD_GET(PWR_THRESHOLD1, v) * 1000000);
+		*val = (long)(FIELD_GET(PWR_THRESHOLD1, v) * MICRO);
 		break;
 	case hwmon_power_crit:
 		v = readq(feature->ioaddr + FME_PWR_THRESHOLD);
-		*val = (long)(FIELD_GET(PWR_THRESHOLD2, v) * 1000000);
+		*val = (long)(FIELD_GET(PWR_THRESHOLD2, v) * MICRO);
 		break;
 	case hwmon_power_max_alarm:
 		v = readq(feature->ioaddr + FME_PWR_THRESHOLD);
@@ -441,7 +437,7 @@ static int power_hwmon_write(struct device *dev, enum hwmon_sensor_types type,
 	int ret = 0;
 	u64 v;
 
-	val = clamp_val(val / 1000000, 0, PWR_THRESHOLD_MAX);
+	val = clamp_val(val / MICRO, 0, PWR_THRESHOLD_MAX);
 
 	mutex_lock(&fdata->lock);
 
@@ -515,7 +511,7 @@ static ssize_t power1_xeon_limit_show(struct device *dev,
 	if (FIELD_GET(XEON_PWR_EN, v))
 		xeon_limit = FIELD_GET(XEON_PWR_LIMIT, v);
 
-	return sprintf(buf, "%u\n", xeon_limit * 100000);
+	return sysfs_emit(buf, "%u\n", xeon_limit * 100000);
 }
 
 static ssize_t power1_fpga_limit_show(struct device *dev,
@@ -530,7 +526,7 @@ static ssize_t power1_fpga_limit_show(struct device *dev,
 	if (FIELD_GET(FPGA_PWR_EN, v))
 		fpga_limit = FIELD_GET(FPGA_PWR_LIMIT, v);
 
-	return sprintf(buf, "%u\n", fpga_limit * 100000);
+	return sysfs_emit(buf, "%u\n", fpga_limit * 100000);
 }
 
 static ssize_t power1_ltr_show(struct device *dev,
@@ -541,8 +537,7 @@ static ssize_t power1_ltr_show(struct device *dev,
 
 	v = readq(feature->ioaddr + FME_PWR_STATUS);
 
-	return sprintf(buf, "%u\n",
-		       (unsigned int)FIELD_GET(FME_LATENCY_TOLERANCE, v));
+	return sysfs_emit(buf, "%llu\n", FIELD_GET(FME_LATENCY_TOLERANCE, v));
 }
 
 static DEVICE_ATTR_RO(power1_xeon_limit);
