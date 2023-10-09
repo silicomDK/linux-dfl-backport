@@ -888,7 +888,7 @@ static void n5010_htk_setup_regs(struct net_device *netdev)
 	udelay(10000);
 
 	netdev_dbg(netdev, "HTKDEBUG: 12.5. Start. Wait for Rx traffic available.");
-	success = n5010_htk_wait_for_rx_freqlocked_1ms(netdev, 10000000);
+	success = n5010_htk_wait_for_rx_freqlocked_1ms(netdev, 2000000);
 	if  (success == 0) {
 		netdev_info(netdev, "HTKDEBUG: 12.5. ERROR Timeout while waiting for all channels to have Rx traffic.");
 	}
@@ -955,7 +955,7 @@ static void n5010_htk_setup_regs(struct net_device *netdev)
 
 	//netdev_info(netdev, "HTKexDEBUG: 20. Check link status.");
 	netdev_dbg(netdev, "HTKDEBUG: 20. Check link status.");
-	success = n5010_htk_wait_for_rx_freqlocked_1ms(netdev, 2000000);
+	success = n5010_htk_wait_for_rx_freqlocked_1ms(netdev, 500000);
 	if  (success == 0) {
 		netdev_info(netdev, "HTKDEBUG: 20. ERROR Timeout while waiting for rx_locked for 1 millisecond. It should have been in Continuous Adaptation now.");
 	}
