@@ -40,12 +40,22 @@
 #define MB_PHY_OFFSET		0xa8
 #define MB_PORT_SIZE		0x10
 
+#define PHY_REG_AVALON_START 0x4
+#define PHY_REG_AVALON_END   0x207
+#define PHY_REG_PMA_START    0x40000
+#define PHY_REG_PMA_END      0x40144
+
 #define PHY_BASE_OFF		0x2000
 #define PHY_RX_SER_LOOP_BACK	0x4e1
 
 #define FEC_RX_STATUS		0x180
 #define FEC_RX_STATUS_LINK	0x0ULL
 #define FEC_RX_STATUS_LINK_NO	0x3ULL
+
+#define MAC_REG_START 0x300
+#define MAC_REG_HOLE1 0x709
+#define MAC_REG_HOLE2 0x800
+#define MAC_REG_END 0xbbf
 
 #define MAC_TX_SRC_ADDR_LO	0x40c
 #define MAC_TX_SRC_ADDR_HI	0x40d
@@ -389,6 +399,26 @@ enum n5010_hssi_regmap {
 	regmap_phy,
 };
 
+static const struct regmap_range mac_regmap_range[] = {
+	regmap_reg_range(MAC_REG_START, MAC_REG_HOLE1),
+	regmap_reg_range(MAC_REG_HOLE2, MAC_REG_END),
+};
+
+static const struct regmap_access_table mac_access_table = {
+	.yes_ranges	= mac_regmap_range,
+	.n_yes_ranges	= ARRAY_SIZE(mac_regmap_range),
+};
+
+static const struct regmap_range phy_regmap_range[] = {
+	regmap_reg_range(PHY_REG_AVALON_START, PHY_REG_AVALON_END),
+	regmap_reg_range(PHY_REG_PMA_START, PHY_REG_PMA_END),
+};
+
+static const struct regmap_access_table phy_access_table = {
+	.yes_ranges	= phy_regmap_range,
+	.n_yes_ranges	= ARRAY_SIZE(phy_regmap_range),
+};
+
 #ifndef devm_regmap_init_indirect_register
 struct regmap *devm_regmap_init_indirect_register(struct device *dev,
 						  void __iomem *base,
@@ -411,7 +441,9 @@ static struct regmap *n5010_hssi_create_regmap(struct n5010_hssi_drvdata *priv,
 			  "n5010_hssi_mac%llu", port);
 		base += MB_MAC_OFFSET;
 		cfg.val_bits = 32;
-		cfg.max_register = 0xbbf;
+		cfg.wr_table = &mac_access_table,
+		cfg.rd_table = &mac_access_table,
+		cfg.max_register = MAC_REG_END;
 		break;
 	case regmap_fec:
 		scnprintf(regmap_name, REGMAP_NAME_SIZE,
@@ -425,7 +457,9 @@ static struct regmap *n5010_hssi_create_regmap(struct n5010_hssi_drvdata *priv,
 			  "n5010_hssi_phy%llu", port);
 		base += MB_PHY_OFFSET;
 		cfg.val_bits = 8;
-		cfg.max_register = 0x40144;
+		cfg.wr_table = &phy_access_table,
+		cfg.rd_table = &phy_access_table,
+		cfg.max_register = PHY_REG_PMA_END;
 		break;
 	}
 
