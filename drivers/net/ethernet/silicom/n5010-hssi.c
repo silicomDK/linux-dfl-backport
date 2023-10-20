@@ -57,10 +57,14 @@
 #define MAC_REG_HOLE2 0x800
 #define MAC_REG_END 0xbbf
 
+#define MAC_TX_CONFIGURATION 0x40a
 #define MAC_TX_SRC_ADDR_LO	0x40c
 #define MAC_TX_SRC_ADDR_HI	0x40d
 #define MAC_RX_MTU		0x506
 #define MAC_MAX_MTU		9600
+
+#define ILL_100G_TX_SADDR_INSERT 0x8
+#define ILL_100G_TX_DIS_TXVLAN 0x2 //default
 
 #define ILL_100G_RX_FWD_FCS	0x507
 #define ILL_100G_TX_STATS_CLR	0x845
@@ -163,6 +167,16 @@ static int netdev_set_mac_address(struct net_device *netdev, void *p)
 	mac_part1 = (addr->sa_data[0] << 8) | addr->sa_data[1];
 	mac_part2 = (addr->sa_data[2] << 24) | (addr->sa_data[3] << 16) |
 		    (addr->sa_data[4] << 8) | addr->sa_data[5];
+
+	if (addr->sa_data[0] == 0 && addr->sa_data[1] == 0 && addr->sa_data[2] == 0 &&
+		addr->sa_data[3] == 0 && addr->sa_data[4] == 0 && addr->sa_data[5] == 0)
+		ret = regmap_write(npriv->regmap_mac, MAC_TX_CONFIGURATION, ILL_100G_TX_DIS_TXVLAN);
+	else
+		ret = regmap_write(npriv->regmap_mac, MAC_TX_CONFIGURATION,
+		ILL_100G_TX_SADDR_INSERT | ILL_100G_TX_DIS_TXVLAN);
+
+	if (ret)
+		return ret;
 
 	ret = regmap_write(npriv->regmap_mac, MAC_TX_SRC_ADDR_HI, mac_part1);
 	if (ret)
