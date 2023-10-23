@@ -114,19 +114,19 @@ static int n5010_phy_set_led(struct n5010_port *port, bool link)
 	switch (port->num) {
 	case 0:
 		offset = N5010_PHY_CSR_1;
-		mask = N5010_PHY_LED_0;
+		mask = N5010_PHY_LED_1; //LED 0/1 swapped because of bracket LC-673
 		break;
 	case 1:
 		offset = N5010_PHY_CSR_1;
-		mask = N5010_PHY_LED_1;
+		mask = N5010_PHY_LED_0;
 		break;
 	case 2:
 		offset = N5010_PHY_CSR_0;
-		mask = N5010_PHY_LED_0;
+		mask = N5010_PHY_LED_1; //LED 2/3 swapped because of bracket LC-673
 		break;
 	case 3:
 		offset = N5010_PHY_CSR_0;
-		mask = N5010_PHY_LED_1;
+		mask = N5010_PHY_LED_0;
 		break;
 	default:
 		return -EINVAL;
